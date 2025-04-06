@@ -1,21 +1,8 @@
+import { and, eq, inArray } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/d1";
+import { achievementsMeta, achievementsStats, apps } from "./schema.js";
 // @ts-check
 import { getPlatformProxy } from "wrangler";
-import { drizzle } from "drizzle-orm/d1";
-import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
-import { eq, sql } from "drizzle-orm";
-
-export const users = sqliteTable("user", {
-  id: text("id").notNull().primaryKey(),
-  name: text("name").notNull(),
-});
-
-export const sessions = sqliteTable("session", {
-  id: text("id").notNull().primaryKey(),
-  userId: text("user_id")
-    .notNull()
-    .references(() => users.id),
-  expiresAt: integer("expires_at").notNull(),
-});
 
 const platform = await getPlatformProxy();
 /** @type {D1Database} */
@@ -24,39 +11,48 @@ const d1 = platform.env.DB;
 
 const db = drizzle(d1);
 
-await db.run(sql`DROP TABLE IF EXISTS session`);
-await db.run(sql`DROP TABLE IF EXISTS user`);
+const result = db
+	.select({
+		achievements_stats: achievementsStats,
+		achievements_meta: {
+			app_id: achievementsMeta.app_id,
+			lang: achievementsMeta.lang,
+			// data: achievementsMeta.data, // Breaks because of JSON parsing "undefined"
+		},
+	})
+	.from(achievementsStats)
+	.leftJoin(
+		achievementsMeta,
+		and(
+			eq(achievementsStats.app_id, achievementsMeta.app_id),
+			eq(achievementsMeta.lang, "english"),
+		),
+	)
+	.where(inArray(achievementsStats.app_id, [2195250]));
 
-await db.run(
-  sql`CREATE TABLE user (id text PRIMARY KEY NOT NULL, name text NOT NULL)`
-);
+try {
+	const [res] = await db.batch([result]);
+	console.log("Fetched batch:", res);
+} catch (e) {
+	console.error("Error fetching batch:", e);
+}
 
-await db.run(sql`CREATE TABLE session (\n
-  id text PRIMARY KEY NOT NULL,
-  user_id text NOT NULL,
-  expires_at integer NOT NULL,
-  FOREIGN KEY (user_id) REFERENCES user(id) ON UPDATE NO ACTION ON DELETE NO ACTION
-)`);
+try {
+	const res = await result;
+	console.log("Fetched single query:", res);
+} catch (e) {
+	console.error("Error fetching data:", e);
+}
 
-await db.insert(users).values({
-  id: "user-id-1",
-  name: "Alice",
-});
+// const rawSqlBatch = result.toSQL();
+// const resultBatch = d1.batch([
+// 	d1.prepare(rawSqlBatch.sql).bind(...rawSqlBatch.params),
+// ]);
+// console.log((await resultBatch).map((r) => r.results));
 
-await db.insert(sessions).values({
-  id: "session-id-1",
-  userId: "user-id-1",
-  expiresAt: 123456,
-});
-
-const result = await db
-  .select({
-    user: users,
-    session: sessions,
-  })
-  .from(sessions)
-  .innerJoin(users, eq(sessions.userId, users.id))
-  .where(eq(sessions.id, "session-id-1"))
-  .get();
-
-console.log(JSON.stringify(result, null, 2));
+// const rawSql = result.toSQL();
+// const rawResult = d1
+// 	.prepare(rawSql.sql)
+// 	.bind(...rawSql.params)
+// 	.raw();
+// console.log(await rawResult);

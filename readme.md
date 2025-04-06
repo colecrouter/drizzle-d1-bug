@@ -3,39 +3,35 @@
 ## Reproduction
 
 - Install dependencies with `npm install`
+- Run `npx wrangler d1 execute iirc --file schema.sql` to create the database & data
 - Run `node index.js` and observe the output
-
-There seems to be an off by one error somewhere.
 
 ## Expected output
 
-```json
-{
-  "user": {
-    "id": "user-id-1",
-    "name": "Alice"
-  },
-  "session": {
-    "id": "session-id-1",
-    "userId": "user-id-1",
-    "expiresAt": 123456
+```plaintext
+[
+  {
+    achievements_stats: {
+      app_id: 2195250,
+      data: [Array],
+      updated_at: 2023-10-25T10:40:00.000Z
+    },
+    achievements_meta: { app_id: 'english', lang: undefined }
   }
-}
+]
 ```
 
 ## Actual output
 
-```json
-{
-  "user": {
-    "id": "session-id-1",
-    "name": "Alice"
-  },
-  "session": {
-    "id": "user-id-1",
-    "userId": 123456
+```plaintext
+[
+  {
+    achievements_stats: {
+      app_id: 2195250,
+      data: [Array],
+      updated_at: 2023-10-25T10:40:00.000Z
+    },
+    achievements_meta: { app_id: 2195250, lang: 'english' }
   }
-}
+]
 ```
-
-`session.expiresAt` _is_ set but it's `undefined` (which gets stripped by `JSON.stringify`).
